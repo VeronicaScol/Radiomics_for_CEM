@@ -1,11 +1,10 @@
-from radiomics import featureextractor #open-source radiomics library
+from radiomics import featureextractor
 import pandas as pd
 import tqdm
 
 
-#this function initialises the extractor of features
+
 def initialize_feature_extractor():
-    #parameter file to ensure reproducibility
     paramsFile = "CEM_extraction.yaml"
     extractor = featureextractor.RadiomicsFeatureExtractor(paramsFile, shape2D=True, force2D=True,
                                                            force2Ddimension=True, resampledPixelSpacing=None)
@@ -23,7 +22,6 @@ def initialize_feature_extractor():
     return extractor
 
 
-#function to generate features table
 def generate_features_table(df, extractor,inference_usage=False):
     # warning: this function can take a long time to run
     # extract low energy features
