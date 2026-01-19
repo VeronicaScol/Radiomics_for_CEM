@@ -131,7 +131,7 @@ def get_ci_for_auc(label, pred, nsamples=2000):
     mean_tpr[-1] = 1.0
     ci_auc = np.percentile(auc_values, (2.5, 97.5))
     fpr, tpr, thresholds = sklearn.metrics.roc_curve(label, pred)
-    return auc_values, ["%0.2f CI [%0.2f,%0.2f]" % (sklearn.metrics.auc(fpr, tpr), ci_auc[0], ci_auc[1])]
+    return auc_values, ["%0.2f CI [%0.2f,%0.2f]" % (sklearn.metrics.auc(fpr, tpr), ci_auc[0], ci_auc[1])], [ci_auc[0], ci_auc[1]], mean_tpr
 
 
 def get_stats_with_ci(y_label, y_pred, label, optimal_threshold, nsamples=2000):
@@ -140,7 +140,7 @@ def get_stats_with_ci(y_label, y_pred, label, optimal_threshold, nsamples=2000):
     ##returns a dataframe with auc accuracy precision recall f1-score
     dict_results = {}
     dict_distributions = {}
-    dict_distributions["auc"], dict_results["auc"] = get_ci_for_auc(y_label, y_pred)
+    dict_distributions["auc"], dict_results["auc"], c, d = get_ci_for_auc(y_label, y_pred)
     y_pred_binary = (np.array(y_pred) > optimal_threshold).astype(int)
     dict_distributions["accuracy"], dict_results["accuracy"] = get_ci(y_label, y_pred_binary,
                                                                       sklearn.metrics.accuracy_score)
