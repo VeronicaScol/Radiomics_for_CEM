@@ -8,7 +8,7 @@ from sklearn.feature_selection import VarianceThreshold
 
 ############ pre-process feature table ######################
 
-def get_correlated_features_to_drop(thres_dataset_train: pd.DataFramex, corr_threshold: float = 0.85) -> np.ndarray:
+def get_correlated_features_to_drop(thres_dataset_train: pd.DataFrame, corr_threshold: float = 0.85) -> np.ndarray:
     cor = thres_dataset_train.corr(method = 'spearman').abs()
     upper_tri = cor.where(np.triu(np.ones(cor.shape), k=1).astype(bool))
     to_drop = []
@@ -232,3 +232,7 @@ def save_pickle(obj, path: str):
 def load_pickle(path: str):
     with open(path, "rb") as f:
         return pickle.load(f)
+
+#########################MAIN FUNC###########################3333
+
+
