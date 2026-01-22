@@ -31,7 +31,7 @@ def filter_method_cv(
     scoring="roc_auc",
     n_splits=10,
     shuffle=True,
-    random_state=42,
+    random_state=27,
     n_jobs=-1,
     refit=True,
     return_search=False,
@@ -125,7 +125,7 @@ def rfe_no_cv(X, y, n_features=10, estimator=None, return_support=False):
         Names of selected features
     """
     if estimator is None:
-        estimator = RandomForestClassifier(n_estimators=100, random_state=42)
+        estimator = RandomForestClassifier(n_estimators=100, random_state=27)
     
     selector = RFE(estimator=estimator, n_features_to_select=n_features)
     selector.fit(X, y)
@@ -163,7 +163,7 @@ def rfe_with_cv(
     min_features_to_select=10,
     n_splits=10,
     shuffle=True,
-    random_state=42,
+    random_state=27,
     scoring="roc_auc",
     return_support=False,
 ):
@@ -182,7 +182,7 @@ def rfe_with_cv(
         The fitted RFECV object (for inspection)
     """
     if estimator is None:
-        estimator = RandomForestClassifier(n_estimators=100, random_state=42)
+        estimator = RandomForestClassifier(n_estimators=100, random_state=27)
 
     cv = StratifiedKFold(n_splits=n_splits, shuffle=shuffle, random_state=random_state)
 
@@ -241,7 +241,7 @@ def embedded_method(X, y, n_features=10, model=None, threshold=None, return_supp
         Names of selected features
     """
     if model is None:
-        model = RandomForestClassifier(n_estimators=100, random_state=42)
+        model = RandomForestClassifier(n_estimators=100, random_state=27)
     
     if threshold is not None:
         selector = SelectFromModel(model, threshold=threshold)
@@ -290,7 +290,7 @@ def embedded_l1_logregcv(
     solver="saga",
     max_iter=10000,
     n_jobs=-1,
-    random_state=42,
+    random_state=27,
     Cs=10,
     fit_intercept=True,
     class_weight=None,
