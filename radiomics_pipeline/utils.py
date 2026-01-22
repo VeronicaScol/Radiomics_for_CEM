@@ -1,5 +1,6 @@
 import sklearn
 import numpy as np
+import pandas as pd
 import pickle
 import pandas as pd
 from sklearn.feature_selection import VarianceThreshold
@@ -7,46 +8,66 @@ from sklearn.feature_selection import VarianceThreshold
 
 ############ pre-process feature table ######################
 
-def get_correlated_features_to_drop(thres_dataset_train):
-    cor = thres_dataset_train.corr('spearman').abs()
-    upper_tri = cor.where(np.triu(np.ones(cor.shape), k=1).astype(np.bool))
+def get_correlated_features_to_drop(thres_dataset_train: pd.DataFramex, corr_threshold: float = 0.85) -> np.ndarray:
+    cor = thres_dataset_train.corr(method = 'spearman').abs()
+    upper_tri = cor.where(np.triu(np.ones(cor.shape), k=1).astype(bool))
     to_drop = []
     for column in upper_tri.columns:
         for row in upper_tri.columns:
-            if upper_tri[column][row] > 0.85:
-                if np.sum(upper_tri[column]) > np.sum(
-                        upper_tri[row]):
+            val = upper_tri.at[row, column]
+            if pd.notna(val) and val > corr_threshold:
+                if np.nansum(upper_tri[column].values) > np.nansum(upper_tri[row].values):
                     to_drop.append(column)
                 else:
                     to_drop.append(row)
-    to_drop = np.unique(to_drop)
-    return to_drop
+    return np.unique(to_drop)
 
 
-def preprocessing_train(df_true_mask_train_features):  ##patient name needs to be removed
+def preprocessing_train(df_train_features: pd.DataFrame,
+                        variance_threshold: float = 0.01,
+                        corr_threshold: float = 0.85):  ##patient name needs to be removed
     ##normalize the features
+    df = df_train_features.copy()
     mean_std = {}
-    for var in df_true_mask_train_features.columns:
-        temp_mean = df_true_mask_train_features[var].mean()
-        temp_std = df_true_mask_train_features[var].std()
+    for var in df.columns:
+        temp_mean = df[var].mean()
+        temp_std = df[var].std()
         mean_std[var] = (temp_mean, temp_std)
-        df_true_mask_train_features[var] = (df_true_mask_train_features[var] - temp_mean) / temp_std
-    ##remove low variance features
-    selector = VarianceThreshold(threshold=0.01)
-    selector.fit(df_true_mask_train_features)
-    thres_dataset_train = df_true_mask_train_features.loc[:, selector.get_support()]
-    ## get_correlated_features_to_drop
-    to_drop = get_correlated_features_to_drop(thres_dataset_train)
-    decor_dataset = thres_dataset_train.drop(to_drop, axis=1)
-    return mean_std, selector, to_drop, decor_dataset
+        # avoid division by zero
+        df[var] = (df[var] - temp_mean) / (temp_std if temp_std != 0 else 1.0)
+
+    selector = VarianceThreshold(threshold=variance_threshold)
+    selector.fit(df)
+    thres_dataset_train = df.loc[:, selector.get_support()]
+
+    to_drop = get_correlated_features_to_drop(thres_dataset_train, corr_threshold=corr_threshold)
+    decor_dataset_train = thres_dataset_train.drop(to_drop, axis=1, errors="ignore")
+    return mean_std, selector, to_drop, decor_dataset_train
 
 
-def preprocessing_test(df_true_mask_test_features, mean_std, selector, to_drop):  ##apply parameters to test dataset
-    for var in df_true_mask_test_features.columns:
-        df_true_mask_test_features[var] = (df_true_mask_test_features[var] - mean_std[var][0]) / mean_std[var][1]
-    thres_dataset_test = df_true_mask_test_features.loc[:, selector.get_support()]
-    decor_dataset_test = thres_dataset_test.drop(to_drop, axis=1)
-    return decor_dataset_test
+def preprocessing_test(df_test_features: pd.DataFrame, mean_std, selector, to_drop) -> pd.DataFrame: ##apply parameters to test dataset
+    df = df_test_features.copy()
+    for var in df.columns:
+        if var not in mean_std:
+            # if columns mismatch, leave as-is; downstream selection will drop
+            continue
+        m, s = mean_std[var]
+        df[var] = (df[var] - m) / (s if s != 0 else 1.0)
+
+    thres_dataset_test = df.loc[:, selector.get_support()]
+    decor_dataset_test = thres_dataset_test.drop(to_drop, axis=1, errors="ignore")
+    return decor_dataset_test    
+
+#####################Prediction helpers######################
+
+def predict_proba_1(model, X: pd.DataFrame) -> np.ndarray:
+    if hasattr(model, "predict_proba"):
+        proba = model.predict_proba(X)
+        return proba[:, 1]
+    if hasattr(model, "decision_function"):
+        scores = model.decision_function(X)
+        return 1 / (1 + np.exp(-scores))
+    raise AttributeError("Model must implement predict_proba or decision_function.")
 
 
 ##################### generate results #################
@@ -83,11 +104,13 @@ def get_results(y_label, y_pred, label,
 np.random.seed(32)
 
 
-def bootstrap(label, pred, f, nsamples=2000):
+def bootstrap(label, pred, f, nsamples=2000, random_state = 32):
+    rng = np.random.default_rng(random_state)
     stats = []
-    for b in range(nsamples):
-        random_list = np.random.randint(label.shape[0], size=label.shape[0])
-        stats.append(f(label[random_list], pred[random_list]))
+    n = label.shape [0]
+    for _ in range(nsamples):
+        idx = rng.integers(0, n, size=n)
+        stats.append(f(label[idx], pred[idx]))
     return stats, np.percentile(stats, (2.5, 97.5))
 
 
@@ -107,30 +130,33 @@ def nom_den(label, pred, f):
     return n, d
 
 
-def get_ci(label, pred, f):
-    stats, ci = bootstrap(label, pred, f)
+def get_ci(label, pred, f, nsamples= 2000):
+    stats, ci = bootstrap(label, pred, f, samples= samples)
     n, d = nom_den(label, pred, f)
-    return stats, ["%5d/%5d (%5d %% )  CI [%0.2f,%0.2f]" % (
-    n, d, int(f(label, pred) * 100), ci[0], ci[1])]  # doesn't compute the mean of the score
+    return stats, ["%5d/%5d (%5d %% )  CI [%0.2f,%0.2f]" % (n, d, int(f(label, pred) * 100), ci[0], ci[1])]  # doesn't compute the mean of the score
 
 
-def get_ci_for_auc(label, pred, nsamples=2000):
+def get_ci_for_auc(label, pred, nsamples=2000, random_state = 32):
+    rng = np.random.default_rng(random_state)    
     auc_values = []
     tprs = []
     mean_fpr = np.linspace(0, 1, 100)
-    for b in range(nsamples):
-        idx = np.random.randint(label.shape[0], size=label.shape[0])
+
+    n= label.shape[0]
+    for _ in range(nsamples):
+        idx = rng.integers(0, n, size=n)
         temp_pred = pred[idx]
-        temp_fpr, temp_tpr, temp_thresholds = sklearn.metrics.roc_curve(label[idx], temp_pred)
+        temp_fpr, temp_tpr, _ = sklearn.metrics.roc_curve(label[idx], temp_pred)
         roc_auc = sklearn.metrics.auc(temp_fpr, temp_tpr)
         auc_values.append(roc_auc)
         interp_tpr = np.interp(mean_fpr, temp_fpr, temp_tpr)
         interp_tpr[0] = 0.0
         tprs.append(interp_tpr)
+        
     mean_tpr = np.mean(tprs, axis=0)
     mean_tpr[-1] = 1.0
     ci_auc = np.percentile(auc_values, (2.5, 97.5))
-    fpr, tpr, thresholds = sklearn.metrics.roc_curve(label, pred)
+    fpr, tpr, _ = sklearn.metrics.roc_curve(label, pred)
     return auc_values, ["%0.2f CI [%0.2f,%0.2f]" % (sklearn.metrics.auc(fpr, tpr), ci_auc[0], ci_auc[1])], [ci_auc[0], ci_auc[1]], mean_tpr
 
 
@@ -140,22 +166,20 @@ def get_stats_with_ci(y_label, y_pred, label, optimal_threshold, nsamples=2000):
     ##returns a dataframe with auc accuracy precision recall f1-score
     dict_results = {}
     dict_distributions = {}
-    dict_distributions["auc"], dict_results["auc"], c, d = get_ci_for_auc(y_label, y_pred)
+    
+    dict_distributions["auc"], dict_results["auc"], _, _ = get_ci_for_auc(y_label, y_pred, nsamples = nsamples)
+    
     y_pred_binary = (np.array(y_pred) > optimal_threshold).astype(int)
-    dict_distributions["accuracy"], dict_results["accuracy"] = get_ci(y_label, y_pred_binary,
-                                                                      sklearn.metrics.accuracy_score)
-    dict_distributions["precision"], dict_results["precision"] = get_ci(y_label, y_pred_binary,
-                                                                        sklearn.metrics.precision_score)
-    dict_distributions["specificity"], dict_results["specificity"] = get_ci(np.ones(len(y_label)) - y_label,
-                                                                            np.ones(len(y_pred_binary)) - y_pred_binary,
-                                                                            sklearn.metrics.recall_score)
-    dict_distributions["recall"], dict_results["recall"] = get_ci(y_label, y_pred_binary, sklearn.metrics.recall_score)
-    dict_distributions["f1 score"], dict_results["f1 score"] = get_ci(y_label, y_pred_binary, sklearn.metrics.f1_score)
-    df_results = pd.DataFrame.from_dict(dict_results)
-    df_results = df_results.reset_index(drop=True)
+    
+    dict_distributions["accuracy"], dict_results["accuracy"] = get_ci(y_label, y_pred_binary, sklearn.metrics.accuracy_score, nsamples = nsamples)
+    dict_distributions["precision"], dict_results["precision"] = get_ci(y_label, y_pred_binary, sklearn.metrics.precision_score, nsamples = nsamples)
+    dict_distributions["specificity"], dict_results["specificity"] = get_ci(np.ones(len(y_label)) - y_label, np.ones(len(y_pred_binary)) - y_pred_binary, sklearn.metrics.recall_score, nsamples = nsamples)
+    dict_distributions["recall"], dict_results["recall"] = get_ci(y_label, y_pred_binary, sklearn.metrics.recall_score, nsamples=nsamples)
+    dict_distributions["f1 score"], dict_results["f1 score"] = get_ci(y_label, y_pred_binary, sklearn.metrics.f1_score, nsamples=nsamples)
+    
+    df_results = pd.DataFrame.from_dict(dict_results).reset_index(drop=True)
     df_results.index = [label]
-    df_distributions = pd.DataFrame.from_dict(dict_distributions)
-    df_distributions = df_distributions.reset_index(drop=True)
+    df_distributions = pd.DataFrame.from_dict(dict_distributions).reset_index(drop=True)
     return df_distributions, df_results
 
 
@@ -198,3 +222,13 @@ def load_all_params(path_to_load, data_used="radiomics"):
     filename_proba_external = path_to_load + r"proba_external_" + data_used + ".pkl"
     proba_external = pickle.load(open(filename_proba_external, 'rb'))
     return rfe, filtered_col, gsearch, mean_std, to_drop, selector, support, proba_train, proba_test, proba_external
+
+################Persistence helpers######################
+def save_pickle(obj, path: str):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "wb") as f:
+        pickle.dump(obj, f)
+
+def load_pickle(path: str):
+    with open(path, "rb") as f:
+        return pickle.load(f)
