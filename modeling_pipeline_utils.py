@@ -51,10 +51,13 @@ from radiomics_pipeline.utils import (
     get_stats_with_ci,
 )
 
-# feature selection utilities (your module)
+# feature selection utilities
 import feature_selection_utils as fsu
 
 
+# Container for each experiment run (model + selector)
+# Stores all the results in a single object
+# allows looping over results, plotting confusion matrices per run and building comparison tables
 @dataclass
 class ExperimentResult:
     model_name: str
@@ -68,6 +71,8 @@ class ExperimentResult:
     extra: Dict[str, Any]
 
 
+# from original notebook, but more interoperable for different path names
+# prevents need for repetition, allows notebook and CLI use and prevents bugs
 def load_feature_csv(
     train_csv: str,
     test_csv: str,
@@ -85,7 +90,8 @@ def load_feature_csv(
 
     return X_train, y_train, X_test, y_test
 
-
+# allows RFECV to only select top 10 features
+# original notebook relied on .support_ directly
 def _top_n_from_ranking(ranking: np.ndarray, n: int) -> np.ndarray:
     """Convert a sklearn-style ranking_ array into a boolean mask selecting the top-n features.
 
@@ -97,7 +103,7 @@ def _top_n_from_ranking(ranking: np.ndarray, n: int) -> np.ndarray:
     mask[keep_idx] = True
     return mask
 
-
+# this takes a selector method, the X_train & y_train, a model and the top n features and returns selected feature names, support masks and metadata
 def select_features(
     selector_name: str,
     X_train: pd.DataFrame,
@@ -115,7 +121,7 @@ def select_features(
     extra: Dict[str, Any] = {}
 
     if selector_name == "anova_cv":
-        # SelectKBest (ANOVA by default) where k is tuned by CV performance of the model.
+        # Selects anova method from feature_selection_utils -> SelectKBest (ANOVA by default) where k is tuned by CV performance of the model.
         selected, best_k, best_score, mask = fsu.filter_method_cv(
             X_train,
             y_train,
@@ -126,6 +132,7 @@ def select_features(
         return selected, mask.astype(bool), extra
 
     if selector_name == "rfe_no_cv_top10":
+        # same as in notebook, with support mask outout added
         selected, mask = fsu.rfe_no_cv(
             X_train,
             y_train,
@@ -138,6 +145,7 @@ def select_features(
     if selector_name == "rfecv_rank_top10":
         # RFECV is used to rank features using CV; final training uses top-N by ranking.
         # This satisfies the requirement: "RFECV should select the top 10 features".
+        # replaced rfecv.support with ranking
         _selected, best_n, best_score, _mask, selector = fsu.rfe_with_cv(
             X_train,
             y_train,
@@ -159,6 +167,7 @@ def select_features(
 
     if selector_name == "embedded_method":
         # For tree/boosting models, embedded importance is natural.
+        # new selector: original notebook only had lasso
         selected, mask = fsu.embedded_method(
             X_train,
             y_train,
@@ -170,6 +179,7 @@ def select_features(
 
     if selector_name == "lasso_logregcv":
         # L1-logistic CV selector (its own model inside a pipeline). Returns selected features.
+        # same as original in notebook, only formatted as function
         selected, best_C, n_selected, mask, pipe = fsu.embedded_l1_logregcv(
             X_train,
             y_train,
@@ -291,7 +301,7 @@ def run_experiments(
 ) -> Tuple[List[ExperimentResult], pd.DataFrame, pd.DataFrame]:
     """Run all configured experiments and return results plus comparison tables."""
 
-    # 1) Preprocess (fit on train, apply to test)
+    # 1) Preprocess (fit on train, apply to test) ---> uses old preprocessing features
     mean_std, var_selector, to_drop, X_train_p = preprocessing_train(X_train)
     X_test_p = preprocessing_test(X_test, mean_std, var_selector, to_drop)
 
@@ -391,6 +401,7 @@ def main():
     parser.add_argument("--top_n", type=int, default=10)
     parser.add_argument("--nsamples_ci", type=int, default=2000)
     args = parser.parse_args()
+# CLI option added to allow running overnight jobs, running on a server or cluster, "one command" execution and sharing (Increases reproducibity & code interoperability)
 
     X_train, y_train, X_test, y_test = load_feature_csv(args.train_csv, args.test_csv)
 
