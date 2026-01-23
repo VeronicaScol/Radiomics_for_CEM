@@ -130,10 +130,12 @@ def nom_den(label, pred, f):
     return n, d
 
 
-def get_ci(label, pred, f, nsamples= 2000):
-    stats, ci = bootstrap(label, pred, f, samples= samples)
+def get_ci(label, pred, f, nsamples=2000):
+    stats, ci = bootstrap(label, pred, f, samples=nsamples)
     n, d = nom_den(label, pred, f)
-    return stats, ["%5d/%5d (%5d %% )  CI [%0.2f,%0.2f]" % (n, d, int(f(label, pred) * 100), ci[0], ci[1])]  # doesn't compute the mean of the score
+    return stats, ["%5d/%5d (%5d %% )  CI [%0.2f,%0.2f]" %
+                   (n, d, int(f(label, pred) * 100), ci[0], ci[1])]
+  # doesn't compute the mean of the score
 
 
 def get_ci_for_auc(label, pred, nsamples=2000, random_state = 32):
