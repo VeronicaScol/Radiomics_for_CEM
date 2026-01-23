@@ -43,7 +43,7 @@ from sklearn.metrics import confusion_matrix
 import xgboost as xgb
 
 # local utilities
-from utils_refactored import (
+from radiomics_pipeline.utils import (
     preprocessing_train,
     preprocessing_test,
     predict_proba_1,
