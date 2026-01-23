@@ -266,9 +266,13 @@ def build_model_specs(random_state: int = 27) -> List[Tuple[str, Any]]:
         xgb.XGBClassifier(
             use_label_encoder=False,
             colsample_bytree=1,
+            gamma = 0.5,
+            eta = 0.01,
+            max_depth=3,
             objective="binary:logistic",
             eval_metric="logloss",
             nthread=4,
+            n_estimators=340,
             scale_pos_weight=1,
             seed=random_state,
         ),
