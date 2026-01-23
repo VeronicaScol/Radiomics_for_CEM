@@ -297,7 +297,7 @@ def run_experiments(
     selectors_for_all = [
         "anova_cv",          # ANOVA SelectKBest with CV-tuned k
         "rfe_no_cv_top10",   # RFE selects exactly top 10
-        "rfecv_rank_top10",  # RFECV ranks with CV, then keep top 10
+        #"rfecv_rank_top10",  # RFECV ranks with CV, then keep top 10
     ]
 
     # Additional selectors that are more model-appropriate (optional but useful)
