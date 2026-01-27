@@ -110,7 +110,7 @@ This repository contains a modular machine learning pipeline for training radiom
 #### 1. radiomics_pipeline/utils.py
 **Purpose:** core preprocessing and evaluation utilities
 Contains reusable functions:
-- Featuree preprocessoing
+- Feature preprocessing
 - Probability-based predictors
 - optimal threshold selection
 - metric computation with bootstrap confidence intervals
