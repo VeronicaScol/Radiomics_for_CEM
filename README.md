@@ -33,3 +33,67 @@ The software is provided "as is", without warranty of any kind, express or impli
 The tool is provided for internal non-commercial academic research purposes only. See license for more information.
 
 [link]: https://github.com/fizyr/keras-maskrcnn
+
+# Appendix - Project group MAI3004
+## Getting started
+Before training any models, the provided datasets need to be concatenated and the external dataset needs to be refactored to reflect a binary gorup truth.
+
+The first step is to run the file called 01_merge_LE_RE_features.ipynb using the following files:
+    - train_features_true_mask.csv
+    - train_features_true_mask_low_energy.csv
+    - test_features_true_mask.csv
+    - test_features_true_mask_low_energy.csv
+    - external_features_true_mask.csv
+    - external_features_true_mask_low_energy_v2.csv
+    - annotations_external_dataset.csv
+
+The output of this will be the following files:
+    - train_merged_LE_RE.csv
+    - test_merged_LE_RE.csv
+    - external_merged_LE_RE.csv (intermediate file- further processed in external ground truth section)
+    - external_test.csv
+
+Moving forward, the training dataset refers to train_merged_LE_RE.csv and the testing dataset is either test_merged_LE_RE.csv for initial testing and external_test.csv for external validation of the results.
+
+## Exploratory data analysis
+### eda_radiomics
+Files needed:
+    - train_merged_LE_RE.csv, test_merged_LE_RE.csv, external_test.csv 
+    
+## Radiomics machine learning Pipeline (File structure & usage)
+This repository contains a modular machine learning pipeline for training radiomics (& radiomics + clinical features) based classifiers. The pipeline is organised into utility modules and notebooks for experiment runs and outputs. This ensures reproducibility, consistency and fair model comparion.
+
+## Key files for radiomics ML workflow
+1. radiomics_pipeline/utils.py
+    Purpose: core preprocessing and evaluation utilities
+    Contains reusable functions:
+       - Featuree preprocessoing
+       - Probability-based predictors
+       - optimal threshold selection
+       - metric computation with bootstrap confidence intervals
+
+ 2. feature_selection_utils.py
+     Purpose: implement different feature selection strategies
+     Contains
+        - Filter methods (ANOVA)
+        - Wrapper methods (RFE and RFECV)
+        - Embedded methods (tree based and L1-regularised logistic regression)
+     Each selector returns a standardised output so that they can be switched out and applied to different models.
+
+3. modeling_pipeline_utils.utils
+    Purpose: experiment orchestration and model comparison
+    This file defines the full modeling pipeline:
+        - Loads training and testing feature CSVs
+        - Applies consistent preprocessing
+        - Runs multiple combinations of:
+            - feature selection methods
+            - machine learning models (e.g. XGBoost, Random Forest, SVM, Logistic Regression)
+        - Trains models using selected features
+        - Determines optimal decision thresholds on training data
+        - Evaluates performance on test data with:
+            - ROC-AUC and other metrics (with confidence intervals)
+            - Confusion matrices (raw and normalized)
+        - Aggregates results for side-by-side comparison
+     This file acts as the single entry point for running radiomics ML experiments
+   
+5.     
