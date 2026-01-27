@@ -71,6 +71,21 @@ class ExperimentResult:
     extra: Dict[str, Any]
 
 
+
+#getting optimal classweight for XGBoost parameters
+
+def get_optimal_classweight(outcome): #outcome should be binary 0/1
+
+    if sum(outcome) <= (len(outcome) / 2): #if class 1 is minority or equal
+        optimal_classweight = (len(outcome) - sum(outcome)) / sum (outcome)
+    
+    else:
+        optimal_classweight = sum(outcome) / (len(outcome) - sum(outcome))
+
+    return optimal_classweight
+
+
+
 # from original notebook, but more interoperable for different path names
 # prevents need for repetition, allows notebook and CLI use and prevents bugs
 def load_feature_csv(
@@ -88,7 +103,11 @@ def load_feature_csv(
     y_test = df_test[outcome_col].to_numpy()
     X_test = df_test.drop(list(drop_cols), axis=1, errors="ignore")
 
+    
+
     return X_train, y_train, X_test, y_test
+
+
 
 # allows RFECV to only select top 10 features
 # original notebook relied on .support_ directly
@@ -238,10 +257,11 @@ def fit_and_evaluate(
     return thr, cm, cm_norm, df_metrics
 
 
-def build_model_specs(random_state: int = 27) -> List[Tuple[str, Any]]:
+def build_model_specs(random_state: int = 27, optimal_classweight=1) -> List[Tuple[str, Any]]:
     """Define the base models used in experiments."""
     specs: List[Tuple[str, Any]] = []
 
+    
     specs.append((
         "logreg",
         LogisticRegression(
@@ -283,7 +303,7 @@ def build_model_specs(random_state: int = 27) -> List[Tuple[str, Any]]:
             eval_metric="logloss",
             nthread=4,
             n_estimators=340,
-            scale_pos_weight=1,
+            scale_pos_weight=optimal_classweight,
             seed=random_state,
         ),
     ))
@@ -305,8 +325,12 @@ def run_experiments(
     mean_std, var_selector, to_drop, X_train_p = preprocessing_train(X_train)
     X_test_p = preprocessing_test(X_test, mean_std, var_selector, to_drop)
 
+    # 1.b) Get the optimal classweight for XGboost
+    optimal_classweight = get_optimal_classweight(y_train)
+
+    
     # 2) Define model + selector grid
-    models = build_model_specs(random_state=27)
+    models = build_model_specs(random_state=27, optimal_classweight=optimal_classweight)
 
     selectors_for_all = [
         "anova_cv",          # ANOVA SelectKBest with CV-tuned k
